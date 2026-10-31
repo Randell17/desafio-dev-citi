@@ -1,5 +1,5 @@
-import { prisma } from "../database/prismaClient";
-import { Luminosidade } from "@prisma/client";
+import prisma from "../database";
+import { Luminosidade, Prisma } from "@prisma/client";
 
 interface IPlantaDTO {
   nome: string;
@@ -19,8 +19,10 @@ export class PlantaRepository {
     return planta;
   }
 
-  async findAll() {
-    const plantas = await prisma.planta.findMany();
+  async findAllFiltered(filters: Prisma.PlantaWhereInput) {
+    const plantas = await prisma.planta.findMany({
+      where: filters,
+    });
     return plantas;
   }
 
@@ -31,7 +33,7 @@ export class PlantaRepository {
     return planta;
   }
 
-  async update(id: number, data: Partial<IPlantaDTO>) {
+  async update(id: number, data: Prisma.PlantaUpdateInput) {
     const planta = await prisma.planta.update({
       where: { id },
       data,
@@ -43,5 +45,33 @@ export class PlantaRepository {
     await prisma.planta.delete({
       where: { id },
     });
+  }
+
+  // Abordagem atómica para evitar condições de corrida na venda
+  async venderAtomico(id: number, quantidade: number) {
+    const resultado = await prisma.planta.updateMany({
+      where: {
+        id,
+        estoque: {
+          gte: quantidade, // Garante que só atualiza se houver estoque suficiente
+        },
+      },
+      data: {
+        estoque: {
+          decrement: quantidade,
+        },
+      },
+    });
+    return resultado.count; // Retorna 1 se atualizou, 0 se falhou a condição
+  }
+
+  async findAllPrecoEstoque() {
+    const plantas = await prisma.planta.findMany({
+      select: {
+        preco: true,
+        estoque: true,
+      },
+    });
+    return plantas;
   }
 }
